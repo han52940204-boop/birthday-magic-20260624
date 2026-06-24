@@ -103,7 +103,7 @@
     #messages {
       position: fixed;
       inset-inline: 18px;
-      bottom: 9vh;
+      bottom: 10vh;
       pointer-events: none;
       text-align: center;
       display: grid;
@@ -119,9 +119,31 @@
     }
 
     #messages div {
-      font-size: clamp(1.35rem, 4vw, 3.25rem);
-      color: #fff4fb;
-      text-shadow: 0 0 18px rgba(255, 111, 183, .9), 0 0 48px rgba(255, 214, 107, .35);
+      font-size: clamp(3.4rem, 12vw, 10rem);
+      font-weight: 900;
+      line-height: .9;
+      letter-spacing: 0;
+      color: transparent;
+      background: linear-gradient(90deg, #fff, #ffd66b, #ff6fb7, #8f74ff, #7de7ff, #fff);
+      background-size: 360% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      animation: finaleGlow 2.4s ease-in-out infinite, finaleShimmer 4.5s linear infinite;
+      text-shadow:
+        0 0 14px rgba(255, 255, 255, .85),
+        0 0 36px rgba(255, 111, 183, .9),
+        0 0 84px rgba(143, 116, 255, .85),
+        0 0 130px rgba(255, 214, 107, .58);
+    }
+
+    @keyframes finaleGlow {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 18px rgba(255, 111, 183, .85)); }
+      50% { transform: scale(1.055); filter: drop-shadow(0 0 36px rgba(255, 214, 107, 1)); }
+    }
+
+    @keyframes finaleShimmer {
+      from { background-position: 0% 50%; }
+      to { background-position: 360% 50%; }
     }
 
     #hud {
@@ -159,23 +181,6 @@
       background: rgba(12, 4, 26, .48);
       border: 1px solid rgba(255, 255, 255, .14);
       text-shadow: 0 0 14px rgba(255, 111, 183, .55);
-    }
-
-    #leftHud {
-      display: grid;
-      gap: 8px;
-    }
-
-    #dateBadge {
-      width: max-content;
-      padding: 8px 12px;
-      color: #fff7fb;
-      font: 700 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
-      border-radius: 8px;
-      background: rgba(12, 4, 26, .52);
-      border: 1px solid rgba(255, 214, 107, .28);
-      box-shadow: 0 0 28px rgba(255, 214, 107, .16);
-      text-shadow: 0 0 14px rgba(255, 214, 107, .6);
     }
 
     button {
@@ -242,10 +247,6 @@
         max-width: calc(100vw - 20px);
       }
 
-      #leftHud {
-        width: 100%;
-      }
-
       .panel {
         width: 100%;
         justify-content: space-between;
@@ -272,21 +273,16 @@
   <video id="preview" playsinline muted></video>
   <div id="overlay">
     <div id="intro" class="intro">
-      <h1>My most most most beloved baby, happy birthday &#10084;&#65039;</h1>
+      <h1>Happy Birthday</h1>
       <p class="subtitle">Please count down with me</p>
     </div>
   </div>
   <div id="countNumber"></div>
   <div id="messages">
-    <div>May you always be happy &#10084;&#65039;</div>
-    <div>I will always be by your side</div>
-    <div>Happy birthday, my dearest love</div>
+    <div>Happy Birthday</div>
   </div>
   <div id="hud">
-    <div id="leftHud">
-      <div id="dateBadge">2026/06/24</div>
-      <div id="status">Opening the stars...</div>
-    </div>
+    <div id="status">Opening the stars...</div>
     <div class="panel">
       <button id="wishButton" disabled>Make a Wish &#10024;</button>
     </div>
@@ -464,6 +460,9 @@
     const cakeParticles = new THREE.Points(cakeGeometry, cakeMaterial);
     cakeGroup.add(cakeParticles);
 
+    const decorGroup = new THREE.Group();
+    cakeGroup.add(decorGroup);
+
     const photoMeshes = [];
     const photoAngles = [];
     let cakeMorph = 0;
@@ -473,9 +472,32 @@
     const wick = new THREE.Vector3(0, 2.84, 0);
     let candle;
     let candleFlame;
+    let audioCtx;
+    let audioMaster;
 
     function setStatus(text) {
       statusEl.textContent = text;
+    }
+
+    async function unlockBirthdayAudio() {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return null;
+      if (!audioCtx) {
+        audioCtx = new AudioContext();
+        audioMaster = audioCtx.createGain();
+        audioMaster.gain.value = .2;
+        audioMaster.connect(audioCtx.destination);
+        const silent = audioCtx.createOscillator();
+        const silentGain = audioCtx.createGain();
+        silentGain.gain.value = .0001;
+        silent.connect(silentGain).connect(audioMaster);
+        silent.start();
+        silent.stop(audioCtx.currentTime + .04);
+      }
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      return audioCtx;
     }
 
     function makeCircleTexture() {
@@ -547,6 +569,77 @@
       cakeGeometry.attributes.color.needsUpdate = true;
     }
 
+    function buildCakeDecorations() {
+      decorGroup.clear();
+      const palette = [0xff66b3, 0xffffff, 0xb794ff, 0xffd66b, 0x7de7ff, 0xff8c7a];
+      const tiers = [
+        { y: -.95, h: 1.0, r: 2.78, count: 72 },
+        { y: .08, h: .86, r: 2.02, count: 56 },
+        { y: .98, h: .72, r: 1.32, count: 42 }
+      ];
+      const groups = palette.map(hex => {
+        const material = new THREE.MeshStandardMaterial({
+          color: hex,
+          emissive: hex,
+          emissiveIntensity: .58,
+          metalness: .18,
+          roughness: .18
+        });
+        const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(.06, 14, 10), material, 170);
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.count = 0;
+        decorGroup.add(mesh);
+        return mesh;
+      });
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const rotation = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      const addBall = (x, y, z, size, colorIndex) => {
+        const mesh = groups[colorIndex % groups.length];
+        const id = mesh.count++;
+        position.set(x, y, z);
+        scale.setScalar(size);
+        matrix.compose(position, rotation, scale);
+        mesh.setMatrixAt(id, matrix);
+      };
+
+      tiers.forEach((tier, tierIndex) => {
+        for (let ring = 0; ring < 2; ring++) {
+          const y = tier.y + (ring === 0 ? -tier.h * .5 - .02 : tier.h * .5 + .02);
+          for (let i = 0; i < tier.count; i++) {
+            const angle = i / tier.count * Math.PI * 2;
+            const wave = Math.sin(angle * 6 + tierIndex) * .018;
+            addBall(
+              Math.cos(angle) * (tier.r + wave),
+              y,
+              Math.sin(angle) * (tier.r + wave),
+              THREE.MathUtils.randFloat(.78, 1.22),
+              i + ring + tierIndex
+            );
+          }
+        }
+        const sprinkleCount = Math.floor(tier.count * .75);
+        for (let i = 0; i < sprinkleCount; i++) {
+          const angle = (i / sprinkleCount * Math.PI * 2) + tierIndex * .3;
+          const y = tier.y + THREE.MathUtils.randFloatSpread(tier.h * .62);
+          const r = tier.r + .035;
+          addBall(
+            Math.cos(angle) * r,
+            y,
+            Math.sin(angle) * r,
+            THREE.MathUtils.randFloat(.45, .78),
+            i * 2 + tierIndex
+          );
+        }
+      });
+
+      groups.forEach(mesh => {
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.computeBoundingSphere();
+      });
+    }
+
     function buildPhotoSlots() {
       photoGroup.clear();
       photoMeshes.length = 0;
@@ -589,21 +682,20 @@
       candle.add(body, wickMesh, candleFlame);
       cakeGroup.add(candle);
       state.candleReady = true;
-      state.mode = "flame";
-      setStatus("Move your index fingertip flame to the candle wick.");
-      flameGroup.visible = true;
     }
 
     function showCake() {
       cakeGroup.visible = true;
       sparkles.visible = true;
       buildCakeTargets();
+      buildCakeDecorations();
       buildPhotoSlots();
+      createCandle();
       cakeMorph = 0;
       state.mode = "cake";
       wishButton.disabled = false;
       overlay.style.display = "none";
-      setStatus("The cake is ready. Move your hand to rotate it, move closer to zoom in, pull away to zoom out.");
+      setStatus("The cake and candle are ready. Move your hand to rotate it, then make a wish.");
     }
 
     function spawnBurst(origin) {
@@ -740,15 +832,14 @@
       playBirthdaySong();
     }
 
-    function playBirthdaySong() {
+    async function playBirthdaySong() {
       if (state.songStarted) return;
+      const ctx = await unlockBirthdayAudio();
+      if (!ctx || ctx.state !== "running") {
+        setStatus("Tap Make a Wish once, then light the candle to play the birthday song.");
+        return;
+      }
       state.songStarted = true;
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      const master = ctx.createGain();
-      master.gain.value = .18;
-      master.connect(ctx.destination);
       const notes = [
         ["G4", .35], ["G4", .25], ["A4", .55], ["G4", .55], ["C5", .55], ["B4", .9],
         ["G4", .35], ["G4", .25], ["A4", .55], ["G4", .55], ["D5", .55], ["C5", .9],
@@ -764,7 +855,7 @@
         gain.gain.setValueAtTime(0, t);
         gain.gain.linearRampToValueAtTime(.9, t + .025);
         gain.gain.exponentialRampToValueAtTime(.001, t + dur);
-        osc.connect(gain).connect(master);
+        osc.connect(gain).connect(audioMaster);
         osc.start(t);
         osc.stop(t + dur + .03);
         t += dur;
@@ -819,14 +910,16 @@
     }
 
     function makeWish() {
+      unlockBirthdayAudio();
       wishButton.disabled = true;
       state.mode = "wish";
       state.selectedPhoto = -1;
       for (const mesh of photoMeshes) mesh.userData.targetScale = 1;
       state.targetRotX = -0.08;
       state.targetRotY = 0;
-      setStatus("Make a wish...");
-      setTimeout(createCandle, 1300);
+      setStatus("Make a wish... now guide the flame to the candle.");
+      state.mode = "flame";
+      flameGroup.visible = true;
     }
 
     function updateGesture(gesture, landmarks) {
@@ -911,11 +1004,12 @@
     }
 
     wishButton.addEventListener("click", makeWish);
+    document.addEventListener("pointerdown", () => unlockBirthdayAudio(), { once: true });
 
     document.querySelectorAll("[data-gesture]").forEach(btn => {
       btn.addEventListener("click", () => {
         const gesture = btn.dataset.gesture;
-        if (gesture === "flame" && state.candleReady) lightCandle();
+        if (gesture === "flame" && state.mode === "flame") lightCandle();
       });
     });
 
